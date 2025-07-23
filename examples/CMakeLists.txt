@@ -1,0 +1,16 @@
+file(GLOB_RECURSE EXAMPLES src/*.cpp)
+
+function(make_example TARGET SOURCE)
+	add_executable(${TARGET} ${SOURCE})
+	target_link_libraries(${TARGET} PRIVATE liteway::shared)
+	if (MSVC)
+		target_compile_options(${TARGET} PRIVATE /EHsc /W4)
+	else()
+		target_compile_options(${TARGET} PRIVATE -fno-exceptions -Wall -Wextra -Wpedantic)
+	endif()
+endfunction()
+
+foreach(EXAMPLE IN LISTS EXAMPLES)
+	get_filename_component(TARGET ${EXAMPLE} NAME_WE)
+	make_example(liteway-example-${TARGET} ${EXAMPLE})
+endforeach()
