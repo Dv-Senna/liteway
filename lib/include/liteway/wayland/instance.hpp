@@ -8,6 +8,9 @@
 
 
 namespace lw::wayland {
+	namespace internals {
+	}
+
 	class LW_EXPORT Instance {
 		Instance(const Instance&) = delete;
 		auto operator=(const Instance&) = delete;
@@ -24,8 +27,24 @@ namespace lw::wayland {
 
 			static auto create(CreateInfos&& createInfos) noexcept -> lw::Failable<Instance>;
 
+			template <typename T>
+			static auto bindGlobalFromRegistry(
+				Instance& instance,
+				std::uint32_t name,
+				std::uint32_t version
+			) noexcept -> void;
+
+			static auto handleRegistryGlobal(
+				void* data,
+				wl_registry* registry,
+				std::uint32_t name,
+				const char* interface,
+				std::uint32_t version
+			) -> void;
 
 		private:
 			lw::Owned<wl_display*> m_display;
+			lw::Owned<wl_registry*> m_registry;
+			lw::Owned<wl_compositor*> m_compositor;
 	};
 }
