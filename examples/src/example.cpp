@@ -1,35 +1,25 @@
 #include <cstdlib>
 #include <print>
 
-#include <liteway/instance.hpp>
 #include <liteway/error.hpp>
+#include <liteway/janitor.hpp>
+#include <liteway/wayland/instance.hpp>
 
 
-auto foo() -> lw::Failable<int> {
-	return lw::makeErrorStack("Error : {}", 12);
+auto run() noexcept -> lw::Failable<void> {
+	lw::Failable instanceWithError {lw::wayland::Instance::create({
+		
+	})};
+	if (!instanceWithError)
+		return lw::pushToErrorStack(instanceWithError, "Can't create liteway instance");
+
+	return {};
 }
-
-auto bar() -> lw::Failable<float> {
-	auto fooResult {foo()};
-	if (!fooResult)
-		return lw::pushToErrorStack(fooResult, "bar error : {}", 3.1415f);
-	return -1.f;
-}
-
 
 auto main(int, char**) -> int {
-	auto barResult {bar()};
-	if (!barResult) {
-		for (; !barResult.error().isEmpty(); barResult.error().pop()) {
-			auto& frame {barResult.error().top()};
-			std::println(stderr, "Error in {} ({}:{}) > {}",
-				frame.sourceLocation.function_name(),
-				frame.sourceLocation.file_name(),
-				frame.sourceLocation.column(),
-				frame.message
-			);
-		}
-	}
-
-	return EXIT_SUCCESS;
+	lw::Failable runResult {run()};
+	if (runResult)
+		return EXIT_SUCCESS;
+	runResult.error().print(stderr);
+	return EXIT_FAILURE;
 }

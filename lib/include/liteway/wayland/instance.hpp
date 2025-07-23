@@ -2,7 +2,9 @@
 
 #include <wayland-client.h>
 
+#include "liteway/error.hpp"
 #include "liteway/export.hpp"
+#include "liteway/pointer.hpp"
 
 
 namespace lw::wayland {
@@ -14,15 +16,16 @@ namespace lw::wayland {
 			inline Instance() noexcept = default;
 			inline Instance(Instance&&) noexcept = default;
 			inline auto operator=(Instance&&) noexcept -> Instance& = default;
+			~Instance();
 
 			struct CreateInfos {
 
 			};
 
-//			static auto create(CreateInfos&& createInfos) noexcept -> ;
+			static auto create(CreateInfos&& createInfos) noexcept -> lw::Failable<Instance>;
 
 
 		private:
-			wl_display* m_display;
+			lw::Owned<wl_display*> m_display;
 	};
 }

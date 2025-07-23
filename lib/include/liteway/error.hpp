@@ -1,11 +1,13 @@
 #pragma once
 
+#include <concepts>
 #include <expected>
 #include <format>
+#include <ostream>
+#include <print>
 #include <source_location>
 #include <stack>
 #include <string>
-#include <tuple>
 
 
 namespace lw {
@@ -30,6 +32,24 @@ namespace lw {
 			inline auto pop() noexcept -> void {m_frames.pop();}
 			inline auto isEmpty() const noexcept -> bool {return m_frames.empty();}
 
+			template <typename T, typename CleanT = std::remove_cvref_t<T>>
+			requires std::same_as<CleanT, FILE*> || std::derived_from<CleanT, std::ostream>
+			inline auto print(T&& file) noexcept -> void {
+				if (m_frames.empty())
+					return;
+				std::println(file, "Error stack:");
+				for (; !m_frames.empty(); m_frames.pop()) {
+					auto& frame {m_frames.top()};
+					std::println(file, "\t- in {} ({}:{}) > {}",
+						frame.sourceLocation.function_name(),
+						frame.sourceLocation.file_name(),
+						frame.sourceLocation.line(),
+						frame.message
+					);
+				}
+			}
+
+
 		private:
 			std::stack<lw::ErrorFrame> m_frames;
 	};
@@ -38,8 +58,9 @@ namespace lw {
 	using Failable = std::expected<T, lw::ErrorStack>;
 
 
+
 	template <typename ...Args>
-	class makeErrorStack {
+	class makeErrorStack final {
 		public:
 			inline makeErrorStack(
 				std::format_string<Args...> format,
@@ -68,7 +89,7 @@ namespace lw {
 
 
 	template <typename ...Args>
-	class pushToErrorStack {
+	class pushToErrorStack final {
 		public:
 			template <typename T>
 			inline pushToErrorStack(
