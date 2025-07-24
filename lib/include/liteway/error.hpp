@@ -5,8 +5,8 @@
 #include <format>
 #include <ostream>
 #include <print>
+#include <queue>
 #include <source_location>
-#include <stack>
 #include <string>
 
 
@@ -28,7 +28,7 @@ namespace lw {
 			inline auto push(lw::ErrorFrame&& frame) noexcept -> void {
 				m_frames.push(std::move(frame));
 			}
-			inline auto top() const noexcept -> const lw::ErrorFrame& {return m_frames.top();}
+			inline auto front() const noexcept -> const lw::ErrorFrame& {return m_frames.front();}
 			inline auto pop() noexcept -> void {m_frames.pop();}
 			inline auto isEmpty() const noexcept -> bool {return m_frames.empty();}
 
@@ -39,7 +39,7 @@ namespace lw {
 					return;
 				std::println(file, "Error stack:");
 				for (; !m_frames.empty(); m_frames.pop()) {
-					auto& frame {m_frames.top()};
+					auto& frame {m_frames.front()};
 					std::println(file, "\t- in {} ({}:{}) > {}",
 						frame.sourceLocation.function_name(),
 						frame.sourceLocation.file_name(),
@@ -51,7 +51,7 @@ namespace lw {
 
 
 		private:
-			std::stack<lw::ErrorFrame> m_frames;
+			std::queue<lw::ErrorFrame> m_frames;
 	};
 
 	template <typename T>

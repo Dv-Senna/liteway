@@ -12,7 +12,6 @@
 
 
 namespace lw::wayland {
-	using RegistryListenerUserData = std::pair<Instance&, lw::Failable<void>>;
 	static const wl_registry_listener registryListener {
 		.global = &Instance::handleRegistryGlobal,
 		.global_remove = [](void*, wl_registry*, std::uint32_t) -> void {}
@@ -24,8 +23,19 @@ namespace lw::wayland {
 		}
 	};
 
+	static const wl_seat_listener seatListener {
+		.capabilities = &Instance::handleSeatCapabilites,
+		.name = [](void*, wl_seat*, const char*) -> void {}
+	};
+
 
 	Instance::~Instance() {
+		if (m_keyboard != nullptr)
+			wl_keyboard_destroy(m_keyboard.release());
+		if (m_pointer != nullptr)
+			wl_pointer_destroy(m_pointer.release());
+		if (m_seat != nullptr)
+			wl_seat_destroy(m_seat.release());
 		if (m_windowManagerBase != nullptr)
 			xdg_wm_base_destroy(m_windowManagerBase.release());
 		if (m_compositor != nullptr)
@@ -49,8 +59,12 @@ namespace lw::wayland {
 		if (instance.m_registry == nullptr)
 			return lw::makeErrorStack("Can't get registry");
 
-		RegistryListenerUserData registryListenerUserData {instance, {}};
-		if (wl_registry_add_listener(instance.m_registry, &registryListener, &registryListenerUserData) != 0)
+		instance.m_registryListenerUserData = std::make_unique<internals::RegistryListenerUserData> (instance);
+		if (wl_registry_add_listener(
+			instance.m_registry,
+			&registryListener,
+			instance.m_registryListenerUserData.get()
+		) != 0)
 			return lw::makeErrorStack("Can't add listener to registry");
 
 		if (wl_display_dispatch(instance.m_display) < 0)
@@ -58,18 +72,23 @@ namespace lw::wayland {
 		if (wl_display_roundtrip(instance.m_display) < 0)
 			return lw::makeErrorStack("Can't wait for display roundtrip");
 
-		if (!registryListenerUserData.second)
-			return lw::pushToErrorStack(registryListenerUserData.second, "Can't bind stuff to the global registry");
+		if (!instance.m_registryListenerUserData->result) {
+			return lw::pushToErrorStack(instance.m_registryListenerUserData->result,
+				"Can't bind stuff to the global registry"
+			);
+		}
+		instance.m_registryListenerUserData->result = {};
 		return instance;
 	}
 
 
 	template <>
 	auto Instance::bindGlobalFromRegistry<wl_compositor> (
-		Instance& instance,
+		internals::RegistryListenerUserData& registryListenerUserData,
 		std::uint32_t name,
 		std::uint32_t version
 	) noexcept -> lw::Failable<void> {
+		Instance& instance {registryListenerUserData.instance};
 		instance.m_compositor = lw::Owned{reinterpret_cast<wl_compositor*> (
 			wl_registry_bind(instance.m_registry, name, &wl_compositor_interface, version)
 		)};
@@ -81,10 +100,11 @@ namespace lw::wayland {
 
 	template <>
 	auto Instance::bindGlobalFromRegistry<xdg_wm_base> (
-		Instance& instance,
+		internals::RegistryListenerUserData& registryListenerUserData,
 		std::uint32_t name,
 		std::uint32_t version
 	) noexcept -> lw::Failable<void> {
+		Instance& instance {registryListenerUserData.instance};
 		instance.m_windowManagerBase = lw::Owned{reinterpret_cast<xdg_wm_base*> (
 			wl_registry_bind(instance.m_registry, name, &xdg_wm_base_interface, version)
 		)};
@@ -97,28 +117,71 @@ namespace lw::wayland {
 	}
 
 
+	template <>
+	auto Instance::bindGlobalFromRegistry<wl_seat> (
+		internals::RegistryListenerUserData& registryListenerUserData,
+		std::uint32_t name,
+		std::uint32_t version
+	) noexcept -> lw::Failable<void> {
+		Instance& instance {registryListenerUserData.instance};
+		instance.m_seat = lw::Owned{reinterpret_cast<wl_seat*> (
+			wl_registry_bind(instance.m_registry, name, &wl_seat_interface, version)
+		)};
+		if (instance.m_seat == nullptr)
+			return lw::makeErrorStack("Can't bind seat");
+
+		if (wl_seat_add_listener(instance.m_seat, &seatListener, &registryListenerUserData.seatListenerUserData) != 0)
+			return lw::makeErrorStack("Can't add listener to seat");
+		return {};
+	}
+
+
 	auto Instance::handleRegistryGlobal(
 		void* data,
 		[[maybe_unused]] wl_registry* registry,
 		std::uint32_t name,
 		const char* interface,
 		std::uint32_t version
-	) -> void {
+	) noexcept -> void {
 		using namespace std::string_view_literals;
-		auto& registryListenerUserData {*reinterpret_cast<RegistryListenerUserData*> (data)};
-		Instance& instance {registryListenerUserData.first};
-		lw::Failable<void>& result {registryListenerUserData.second};
-		if (!result)
+		auto& registryListenerUserData {*reinterpret_cast<internals::RegistryListenerUserData*> (data)};
+		if (!registryListenerUserData.result)
 			return;
 
-		using Interfaces = std::tuple<wl_compositor, xdg_wm_base>;
+		using Interfaces = std::tuple<wl_compositor, xdg_wm_base, wl_seat>;
 
-		result = [&] <std::size_t I = 0> (this const auto& self) noexcept -> lw::Failable<void> {
-			if (interface == lw::utils::getTypeName<std::tuple_element_t<I, Interfaces>> ())
-				return bindGlobalFromRegistry<std::tuple_element_t<I, Interfaces>> (instance, name, version);
+		registryListenerUserData.result = [&] <std::size_t I = 0> (this const auto& self) noexcept
+			-> lw::Failable<void>
+		{
+			if (interface == lw::utils::getTypeName<std::tuple_element_t<I, Interfaces>> ()) {
+				return bindGlobalFromRegistry<std::tuple_element_t<I, Interfaces>> (
+					registryListenerUserData,
+					name,
+					version
+				);
+			}
 			if constexpr (I < std::tuple_size_v<Interfaces> - 1)
 				return self.template operator() <I+1> ();
 			return {};
 		} ();
+	}
+
+
+	auto Instance::handleSeatCapabilites(void* data, wl_seat* seat, std::uint32_t capabilities) noexcept -> void {
+		auto& seatListenerUserData {*reinterpret_cast<internals::SeatListenerUserData*> (data)};
+		Instance& instance {seatListenerUserData.first};
+		lw::Failable<void>& result {seatListenerUserData.second};
+
+		if (!(capabilities & WL_SEAT_CAPABILITY_POINTER))
+			return (void)(result = lw::makeErrorStack("Can't use seat without pointer capability"));
+		if (!(capabilities & WL_SEAT_CAPABILITY_KEYBOARD))
+			return (void)(result = lw::makeErrorStack("Can't use seat without keyboard capability"));
+
+		instance.m_pointer = lw::Owned{wl_seat_get_pointer(seat)};
+		if (instance.m_pointer == nullptr)
+			return (void)(result = lw::makeErrorStack("Can't get seat pointer"));
+		instance.m_keyboard = lw::Owned{wl_seat_get_keyboard(seat)};
+		if (instance.m_keyboard == nullptr)
+			return (void)(result = lw::makeErrorStack("Can't get seat keyboard"));
 	}
 }

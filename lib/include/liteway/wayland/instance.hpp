@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <xdg-shell/xdg-shell-client-protocol.h>
 #include <wayland-client.h>
 
@@ -9,7 +10,21 @@
 
 
 namespace lw::wayland {
+	class Instance;
+
 	namespace internals {
+		using SeatListenerUserData = std::pair<Instance&, lw::Failable<void>&>;
+		struct RegistryListenerUserData {
+			inline RegistryListenerUserData(Instance& instance) noexcept :
+				instance {instance},
+				result {},
+				seatListenerUserData {instance, result}
+			{}
+
+			Instance& instance;
+			lw::Failable<void> result;
+			SeatListenerUserData seatListenerUserData;
+		};
 	}
 
 	class LW_EXPORT Instance {
@@ -30,7 +45,7 @@ namespace lw::wayland {
 
 			template <typename T>
 			static auto bindGlobalFromRegistry(
-				Instance& instance,
+				internals::RegistryListenerUserData& registryListenerUserData,
 				std::uint32_t name,
 				std::uint32_t version
 			) noexcept -> lw::Failable<void>;
@@ -41,12 +56,18 @@ namespace lw::wayland {
 				std::uint32_t name,
 				const char* interface,
 				std::uint32_t version
-			) -> void;
+			) noexcept -> void;
+
+			static auto handleSeatCapabilites(void* data, wl_seat* seat, std::uint32_t capabilities) noexcept -> void;
 
 		private:
+			std::unique_ptr<internals::RegistryListenerUserData> m_registryListenerUserData;
 			lw::Owned<wl_display*> m_display;
 			lw::Owned<wl_registry*> m_registry;
 			lw::Owned<wl_compositor*> m_compositor;
 			lw::Owned<xdg_wm_base*> m_windowManagerBase;
+			lw::Owned<wl_seat*> m_seat;
+			lw::Owned<wl_pointer*> m_pointer;
+			lw::Owned<wl_keyboard*> m_keyboard;
 	};
 }
