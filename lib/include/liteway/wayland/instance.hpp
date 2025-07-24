@@ -1,5 +1,6 @@
 #pragma once
 
+#include <xdg-shell/xdg-shell-client-protocol.h>
 #include <wayland-client.h>
 
 #include "liteway/error.hpp"
@@ -32,7 +33,7 @@ namespace lw::wayland {
 				Instance& instance,
 				std::uint32_t name,
 				std::uint32_t version
-			) noexcept -> void;
+			) noexcept -> lw::Failable<void>;
 
 			static auto handleRegistryGlobal(
 				void* data,
@@ -46,5 +47,6 @@ namespace lw::wayland {
 			lw::Owned<wl_display*> m_display;
 			lw::Owned<wl_registry*> m_registry;
 			lw::Owned<wl_compositor*> m_compositor;
+			lw::Owned<xdg_wm_base*> m_windowManagerBase;
 	};
 }

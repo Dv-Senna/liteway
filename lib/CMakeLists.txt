@@ -18,7 +18,7 @@ file(GLOB_RECURSE SOURCE_FILE ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 add_library(liteway-interface-common INTERFACE)
 target_compile_features(liteway-interface-common INTERFACE cxx_std_23)
 target_include_directories(liteway-interface-common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(liteway-interface-common INTERFACE wayland-client)
+target_link_libraries(liteway-interface-common INTERFACE wayland-client xdg-shell::xdg-shell)
 
 add_library(liteway-private-common INTERFACE)
 if (MSVC)

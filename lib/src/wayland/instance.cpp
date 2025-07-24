@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+#include <xdg-shell/xdg-shell-client-protocol.h>
 #include <wayland-client-core.h>
 #include <wayland-client-protocol.h>
 #include <wayland-client.h>
@@ -11,13 +12,22 @@
 
 
 namespace lw::wayland {
+	using RegistryListenerUserData = std::pair<Instance&, lw::Failable<void>>;
 	static const wl_registry_listener registryListener {
 		.global = &Instance::handleRegistryGlobal,
 		.global_remove = [](void*, wl_registry*, std::uint32_t) -> void {}
 	};
 
+	static const xdg_wm_base_listener windowManagerBaseListener {
+		.ping = [](void*, xdg_wm_base* windowManagerBase, std::uint32_t serial) -> void {
+			xdg_wm_base_pong(windowManagerBase, serial);
+		}
+	};
+
 
 	Instance::~Instance() {
+		if (m_windowManagerBase != nullptr)
+			xdg_wm_base_destroy(m_windowManagerBase.release());
 		if (m_compositor != nullptr)
 			wl_compositor_destroy(m_compositor.release());
 		if (m_registry != nullptr)
@@ -39,7 +49,8 @@ namespace lw::wayland {
 		if (instance.m_registry == nullptr)
 			return lw::makeErrorStack("Can't get registry");
 
-		if (wl_registry_add_listener(instance.m_registry, &registryListener, &instance) != 0)
+		RegistryListenerUserData registryListenerUserData {instance, {}};
+		if (wl_registry_add_listener(instance.m_registry, &registryListener, &registryListenerUserData) != 0)
 			return lw::makeErrorStack("Can't add listener to registry");
 
 		if (wl_display_dispatch(instance.m_display) < 0)
@@ -47,8 +58,8 @@ namespace lw::wayland {
 		if (wl_display_roundtrip(instance.m_display) < 0)
 			return lw::makeErrorStack("Can't wait for display roundtrip");
 
-		if (instance.m_compositor == nullptr)
-			return lw::makeErrorStack("Can't bind compositor");
+		if (!registryListenerUserData.second)
+			return lw::pushToErrorStack(registryListenerUserData.second, "Can't bind stuff to the global registry");
 		return instance;
 	}
 
@@ -58,10 +69,31 @@ namespace lw::wayland {
 		Instance& instance,
 		std::uint32_t name,
 		std::uint32_t version
-	) noexcept -> void {
+	) noexcept -> lw::Failable<void> {
 		instance.m_compositor = lw::Owned{reinterpret_cast<wl_compositor*> (
 			wl_registry_bind(instance.m_registry, name, &wl_compositor_interface, version)
 		)};
+		if (instance.m_compositor == nullptr)
+			return lw::makeErrorStack("Can't bind compositor");
+		return {};
+	}
+
+
+	template <>
+	auto Instance::bindGlobalFromRegistry<xdg_wm_base> (
+		Instance& instance,
+		std::uint32_t name,
+		std::uint32_t version
+	) noexcept -> lw::Failable<void> {
+		instance.m_windowManagerBase = lw::Owned{reinterpret_cast<xdg_wm_base*> (
+			wl_registry_bind(instance.m_registry, name, &xdg_wm_base_interface, version)
+		)};
+		if (instance.m_windowManagerBase == nullptr)
+			return lw::makeErrorStack("Can't bind xdg window manager base");
+
+		if (xdg_wm_base_add_listener(instance.m_windowManagerBase, &windowManagerBaseListener, nullptr) != 0)
+			return lw::makeErrorStack("Can't add listener to xdg window manager base");
+		return {};
 	}
 
 
@@ -73,15 +105,20 @@ namespace lw::wayland {
 		std::uint32_t version
 	) -> void {
 		using namespace std::string_view_literals;
-		auto& instance {*reinterpret_cast<Instance*> (data)};
+		auto& registryListenerUserData {*reinterpret_cast<RegistryListenerUserData*> (data)};
+		Instance& instance {registryListenerUserData.first};
+		lw::Failable<void>& result {registryListenerUserData.second};
+		if (!result)
+			return;
 
-		using Interfaces = std::tuple<wl_compositor>;
+		using Interfaces = std::tuple<wl_compositor, xdg_wm_base>;
 
-		[&] <std::size_t I = 0> (this const auto& self) {
+		result = [&] <std::size_t I = 0> (this const auto& self) noexcept -> lw::Failable<void> {
 			if (interface == lw::utils::getTypeName<std::tuple_element_t<I, Interfaces>> ())
 				return bindGlobalFromRegistry<std::tuple_element_t<I, Interfaces>> (instance, name, version);
 			if constexpr (I < std::tuple_size_v<Interfaces> - 1)
-				self.template operator() <I+1> ();
+				return self.template operator() <I+1> ();
+			return {};
 		} ();
 	}
 }
