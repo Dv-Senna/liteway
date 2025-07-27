@@ -34,22 +34,24 @@ namespace lw::wayland {
 
 
 	Instance::~Instance() {
-		if (m_keyboard != nullptr)
-			wl_keyboard_destroy(m_keyboard.release());
-		if (m_pointer != nullptr)
-			wl_pointer_destroy(m_pointer.release());
-		if (m_seat != nullptr)
-			wl_seat_destroy(m_seat.release());
-		if (m_sharedMemory != nullptr)
-			wl_shm_destroy(m_sharedMemory.release());
-		if (m_windowManagerBase != nullptr)
-			xdg_wm_base_destroy(m_windowManagerBase.release());
-		if (m_compositor != nullptr)
-			wl_compositor_destroy(m_compositor.release());
-		if (m_registry != nullptr)
-			wl_registry_destroy(m_registry.release());
-		if (m_display != nullptr)
-			wl_display_disconnect(m_display.release());
+		if (!m_state)
+			return;
+		if (m_state->keyboard != nullptr)
+			wl_keyboard_destroy(m_state->keyboard.release());
+		if (m_state->pointer != nullptr)
+			wl_pointer_destroy(m_state->pointer.release());
+		if (m_state->seat != nullptr)
+			wl_seat_destroy(m_state->seat.release());
+		if (m_state->sharedMemory != nullptr)
+			wl_shm_destroy(m_state->sharedMemory.release());
+		if (m_state->windowManagerBase != nullptr)
+			xdg_wm_base_destroy(m_state->windowManagerBase.release());
+		if (m_state->compositor != nullptr)
+			wl_compositor_destroy(m_state->compositor.release());
+		if (m_state->registry != nullptr)
+			wl_registry_destroy(m_state->registry.release());
+		if (m_state->display != nullptr)
+			wl_display_disconnect(m_state->display.release());
 	}
 
 
@@ -57,35 +59,35 @@ namespace lw::wayland {
 		static std::size_t instanceCount {};
 		assert(++instanceCount == 1 && "You can't create more than one instance of liteway");
 		Instance instance {};
-		instance.m_display = lw::Owned{wl_display_connect(nullptr)};
-		if (instance.m_display == nullptr)
+		instance.m_state = std::make_unique<internals::InstanceState> ();
+		instance.m_state->display = lw::Owned{wl_display_connect(nullptr)};
+		if (instance.m_state->display == nullptr)
 			return lw::makeErrorStack("Can't connect display");
 
-		instance.m_registry = lw::Owned{wl_display_get_registry(instance.m_display)};
-		if (instance.m_registry == nullptr)
+		instance.m_state->registry = lw::Owned{wl_display_get_registry(instance.m_state->display)};
+		if (instance.m_state->registry == nullptr)
 			return lw::makeErrorStack("Can't get registry");
 
-		instance.m_registryListenerUserData = std::make_unique<internals::RegistryListenerUserData> (instance);
 		if (wl_registry_add_listener(
-			instance.m_registry,
+			instance.m_state->registry,
 			&registryListener,
-			instance.m_registryListenerUserData.get()
+			&instance.m_state->registryListenerUserData
 		) != 0)
 			return lw::makeErrorStack("Can't add listener to registry");
 
-		if (wl_display_dispatch(instance.m_display) < 0)
+		if (wl_display_dispatch(instance.m_state->display) < 0)
 			return lw::makeErrorStack("Can't dispatch display event queue");
-		if (wl_display_roundtrip(instance.m_display) < 0)
+		if (wl_display_roundtrip(instance.m_state->display) < 0)
 			return lw::makeErrorStack("Can't wait for display roundtrip");
 
-		if (!instance.m_registryListenerUserData->result) {
-			return lw::pushToErrorStack(instance.m_registryListenerUserData->result,
+		if (!instance.m_state->registryListenerUserData.result) {
+			return lw::pushToErrorStack(instance.m_state->registryListenerUserData.result,
 				"Can't bind stuff to the global registry"
 			);
 		}
-		instance.m_registryListenerUserData->result = {};
+		instance.m_state->registryListenerUserData.result = {};
 
-		auto& supportedFormats {instance.m_registryListenerUserData->sharedMemoryListenerUserData.supportedFormats};
+		auto& supportedFormats {instance.m_state->registryListenerUserData.sharedMemoryListenerUserData.supportedFormats};
 		if (std::ranges::find(supportedFormats, WL_SHM_FORMAT_ARGB8888) == supportedFormats.end())
 			return lw::makeErrorStack("Needed shared memory format 'WL_SHM_FORMAT_ARGB8888' is not supported");
 		return instance;
@@ -98,11 +100,11 @@ namespace lw::wayland {
 		std::uint32_t name,
 		std::uint32_t version
 	) noexcept -> lw::Failable<void> {
-		Instance& instance {registryListenerUserData.instance};
-		instance.m_compositor = lw::Owned{reinterpret_cast<wl_compositor*> (
-			wl_registry_bind(instance.m_registry, name, &wl_compositor_interface, version)
+		internals::InstanceState& state {registryListenerUserData.state};
+		state.compositor = lw::Owned{reinterpret_cast<wl_compositor*> (
+			wl_registry_bind(state.registry, name, &wl_compositor_interface, version)
 		)};
-		if (instance.m_compositor == nullptr)
+		if (state.compositor == nullptr)
 			return lw::makeErrorStack("Can't bind compositor");
 		return {};
 	}
@@ -114,14 +116,14 @@ namespace lw::wayland {
 		std::uint32_t name,
 		std::uint32_t version
 	) noexcept -> lw::Failable<void> {
-		Instance& instance {registryListenerUserData.instance};
-		instance.m_windowManagerBase = lw::Owned{reinterpret_cast<xdg_wm_base*> (
-			wl_registry_bind(instance.m_registry, name, &xdg_wm_base_interface, version)
+		internals::InstanceState& state {registryListenerUserData.state};
+		state.windowManagerBase = lw::Owned{reinterpret_cast<xdg_wm_base*> (
+			wl_registry_bind(state.registry, name, &xdg_wm_base_interface, version)
 		)};
-		if (instance.m_windowManagerBase == nullptr)
+		if (state.windowManagerBase == nullptr)
 			return lw::makeErrorStack("Can't bind xdg window manager base");
 
-		if (xdg_wm_base_add_listener(instance.m_windowManagerBase, &windowManagerBaseListener, nullptr) != 0)
+		if (xdg_wm_base_add_listener(state.windowManagerBase, &windowManagerBaseListener, nullptr) != 0)
 			return lw::makeErrorStack("Can't add listener to xdg window manager base");
 		return {};
 	}
@@ -133,15 +135,15 @@ namespace lw::wayland {
 		std::uint32_t name,
 		std::uint32_t version
 	) noexcept -> lw::Failable<void> {
-		Instance& instance {registryListenerUserData.instance};
-		instance.m_sharedMemory = lw::Owned{reinterpret_cast<wl_shm*> (
-			wl_registry_bind(instance.m_registry, name, &wl_shm_interface, version)
+		internals::InstanceState& state {registryListenerUserData.state};
+		state.sharedMemory = lw::Owned{reinterpret_cast<wl_shm*> (
+			wl_registry_bind(state.registry, name, &wl_shm_interface, version)
 		)};
-		if (instance.m_sharedMemory == nullptr)
+		if (state.sharedMemory == nullptr)
 			return lw::makeErrorStack("Can't bind shared memory");
 
 		if (wl_shm_add_listener(
-			instance.m_sharedMemory,
+			state.sharedMemory,
 			&sharedMemoryListener,
 			&registryListenerUserData.sharedMemoryListenerUserData
 		) != 0)
@@ -156,14 +158,14 @@ namespace lw::wayland {
 		std::uint32_t name,
 		std::uint32_t version
 	) noexcept -> lw::Failable<void> {
-		Instance& instance {registryListenerUserData.instance};
-		instance.m_seat = lw::Owned{reinterpret_cast<wl_seat*> (
-			wl_registry_bind(instance.m_registry, name, &wl_seat_interface, version)
+		internals::InstanceState& state {registryListenerUserData.state};
+		state.seat = lw::Owned{reinterpret_cast<wl_seat*> (
+			wl_registry_bind(state.registry, name, &wl_seat_interface, version)
 		)};
-		if (instance.m_seat == nullptr)
+		if (state.seat == nullptr)
 			return lw::makeErrorStack("Can't bind seat");
 
-		if (wl_seat_add_listener(instance.m_seat, &seatListener, &registryListenerUserData.seatListenerUserData) != 0)
+		if (wl_seat_add_listener(state.seat, &seatListener, &registryListenerUserData.seatListenerUserData) != 0)
 			return lw::makeErrorStack("Can't add listener to seat");
 		return {};
 	}
@@ -212,7 +214,7 @@ namespace lw::wayland {
 
 	auto Instance::handleSeatCapabilites(void* data, wl_seat* seat, std::uint32_t capabilities) noexcept -> void {
 		auto& seatListenerUserData {*reinterpret_cast<internals::SeatListenerUserData*> (data)};
-		Instance& instance {seatListenerUserData.first};
+		internals::InstanceState& state {seatListenerUserData.first};
 		lw::Failable<void>& result {seatListenerUserData.second};
 
 		if (!(capabilities & WL_SEAT_CAPABILITY_POINTER))
@@ -220,11 +222,11 @@ namespace lw::wayland {
 		if (!(capabilities & WL_SEAT_CAPABILITY_KEYBOARD))
 			return (void)(result = lw::makeErrorStack("Can't use seat without keyboard capability"));
 
-		instance.m_pointer = lw::Owned{wl_seat_get_pointer(seat)};
-		if (instance.m_pointer == nullptr)
+		state.pointer = lw::Owned{wl_seat_get_pointer(seat)};
+		if (state.pointer == nullptr)
 			return (void)(result = lw::makeErrorStack("Can't get seat pointer"));
-		instance.m_keyboard = lw::Owned{wl_seat_get_keyboard(seat)};
-		if (instance.m_keyboard == nullptr)
+		state.keyboard = lw::Owned{wl_seat_get_keyboard(seat)};
+		if (state.keyboard == nullptr)
 			return (void)(result = lw::makeErrorStack("Can't get seat keyboard"));
 	}
 }

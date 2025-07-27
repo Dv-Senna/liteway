@@ -10,27 +10,44 @@
 
 
 namespace lw::wayland {
-	class Instance;
-
 	namespace internals {
-		using SeatListenerUserData = std::pair<Instance&, lw::Failable<void>&>;
+		struct InstanceState;
+
+		using SeatListenerUserData = std::pair<InstanceState&, lw::Failable<void>&>;
 		struct SharedMemoryListenerUserData {
 			std::vector<std::uint32_t> supportedFormats;
 		};
 		struct RegistryListenerUserData {
-			inline RegistryListenerUserData(Instance& instance) noexcept :
-				instance {instance},
+			inline RegistryListenerUserData(InstanceState& state) noexcept :
+				state {state},
 				result {},
-				seatListenerUserData {instance, result},
+				seatListenerUserData {state, result},
 				sharedMemoryListenerUserData {}
 			{}
 
-			Instance& instance;
+			InstanceState& state;
 			lw::Failable<void> result;
 			SeatListenerUserData seatListenerUserData;
 			SharedMemoryListenerUserData sharedMemoryListenerUserData;
 		};
+
+		struct InstanceState {
+			inline InstanceState() noexcept :
+				registryListenerUserData {*this}
+			{}
+
+			internals::RegistryListenerUserData registryListenerUserData;
+			lw::Owned<wl_display*> display;
+			lw::Owned<wl_registry*> registry;
+			lw::Owned<wl_compositor*> compositor;
+			lw::Owned<xdg_wm_base*> windowManagerBase;
+			lw::Owned<wl_shm*> sharedMemory;
+			lw::Owned<wl_seat*> seat;
+			lw::Owned<wl_pointer*> pointer;
+			lw::Owned<wl_keyboard*> keyboard;
+		};
 	}
+
 
 	class LW_EXPORT Instance {
 		Instance(const Instance&) = delete;
@@ -71,14 +88,6 @@ namespace lw::wayland {
 			static auto handleSeatCapabilites(void* data, wl_seat* seat, std::uint32_t capabilities) noexcept -> void;
 
 		private:
-			std::unique_ptr<internals::RegistryListenerUserData> m_registryListenerUserData;
-			lw::Owned<wl_display*> m_display;
-			lw::Owned<wl_registry*> m_registry;
-			lw::Owned<wl_compositor*> m_compositor;
-			lw::Owned<xdg_wm_base*> m_windowManagerBase;
-			lw::Owned<wl_shm*> m_sharedMemory;
-			lw::Owned<wl_seat*> m_seat;
-			lw::Owned<wl_pointer*> m_pointer;
-			lw::Owned<wl_keyboard*> m_keyboard;
+			std::unique_ptr<internals::InstanceState> m_state;
 	};
 }

@@ -45,12 +45,12 @@ namespace lw::wayland {
 	auto Window::create(CreateInfos&& createInfos) noexcept -> lw::Failable<Window> {
 		Window window {};
 
-		window.m_surface = Owned{wl_compositor_create_surface(createInfos.instance.m_compositor)};
+		window.m_surface = Owned{wl_compositor_create_surface(createInfos.instance.m_state->compositor)};
 		if (window.m_surface == nullptr)
 			return lw::makeErrorStack("Can't create wayland surface");
 
 		window.m_xdgSurface = Owned{xdg_wm_base_get_xdg_surface(
-			createInfos.instance.m_windowManagerBase, window.m_surface
+			createInfos.instance.m_state->windowManagerBase, window.m_surface
 		)};
 		if (window.m_xdgSurface == nullptr)
 			return lw::makeErrorStack("Can't create xdg surface");
@@ -64,7 +64,7 @@ namespace lw::wayland {
 
 		lw::Failable bufferWithError {Window::s_createBuffer(
 			createInfos.title,
-			createInfos.instance.m_sharedMemory,
+			createInfos.instance.m_state->sharedMemory,
 			createInfos.width,
 			createInfos.height
 		)};
