@@ -14,18 +14,22 @@
 namespace lw::wayland {
 	static const wl_registry_listener registryListener {
 		.global = &Instance::handleRegistryGlobal,
-		.global_remove = [](void*, wl_registry*, std::uint32_t) -> void {}
+		.global_remove = [](void*, wl_registry*, std::uint32_t) noexcept -> void {}
 	};
 
 	static const xdg_wm_base_listener windowManagerBaseListener {
-		.ping = [](void*, xdg_wm_base* windowManagerBase, std::uint32_t serial) -> void {
+		.ping = [](void*, xdg_wm_base* windowManagerBase, std::uint32_t serial) noexcept -> void {
 			xdg_wm_base_pong(windowManagerBase, serial);
 		}
 	};
 
+	static const wl_shm_listener sharedMemoryListener {
+		.format = &Instance::handleSharedMemoryFormat
+	};
+
 	static const wl_seat_listener seatListener {
 		.capabilities = &Instance::handleSeatCapabilites,
-		.name = [](void*, wl_seat*, const char*) -> void {}
+		.name = [](void*, wl_seat*, const char*) noexcept -> void {}
 	};
 
 
@@ -36,6 +40,8 @@ namespace lw::wayland {
 			wl_pointer_destroy(m_pointer.release());
 		if (m_seat != nullptr)
 			wl_seat_destroy(m_seat.release());
+		if (m_sharedMemory != nullptr)
+			wl_shm_destroy(m_sharedMemory.release());
 		if (m_windowManagerBase != nullptr)
 			xdg_wm_base_destroy(m_windowManagerBase.release());
 		if (m_compositor != nullptr)
@@ -47,7 +53,7 @@ namespace lw::wayland {
 	}
 
 
-	auto Instance::create(CreateInfos&& createInfos) noexcept -> lw::Failable<Instance> {
+	auto Instance::create([[maybe_unused]] CreateInfos&& createInfos) noexcept -> lw::Failable<Instance> {
 		static std::size_t instanceCount {};
 		assert(++instanceCount == 1 && "You can't create more than one instance of liteway");
 		Instance instance {};
@@ -78,6 +84,10 @@ namespace lw::wayland {
 			);
 		}
 		instance.m_registryListenerUserData->result = {};
+
+		auto& supportedFormats {instance.m_registryListenerUserData->sharedMemoryListenerUserData.supportedFormats};
+		if (std::ranges::find(supportedFormats, WL_SHM_FORMAT_ARGB8888) == supportedFormats.end())
+			return lw::makeErrorStack("Needed shared memory format 'WL_SHM_FORMAT_ARGB8888' is not supported");
 		return instance;
 	}
 
@@ -118,6 +128,29 @@ namespace lw::wayland {
 
 
 	template <>
+	auto Instance::bindGlobalFromRegistry<wl_shm> (
+		internals::RegistryListenerUserData& registryListenerUserData,
+		std::uint32_t name,
+		std::uint32_t version
+	) noexcept -> lw::Failable<void> {
+		Instance& instance {registryListenerUserData.instance};
+		instance.m_sharedMemory = lw::Owned{reinterpret_cast<wl_shm*> (
+			wl_registry_bind(instance.m_registry, name, &wl_shm_interface, version)
+		)};
+		if (instance.m_sharedMemory == nullptr)
+			return lw::makeErrorStack("Can't bind shared memory");
+
+		if (wl_shm_add_listener(
+			instance.m_sharedMemory,
+			&sharedMemoryListener,
+			&registryListenerUserData.sharedMemoryListenerUserData
+		) != 0)
+			return lw::makeErrorStack("Can't add listener to shared memory");
+		return {};
+	}
+
+
+	template <>
 	auto Instance::bindGlobalFromRegistry<wl_seat> (
 		internals::RegistryListenerUserData& registryListenerUserData,
 		std::uint32_t name,
@@ -148,7 +181,7 @@ namespace lw::wayland {
 		if (!registryListenerUserData.result)
 			return;
 
-		using Interfaces = std::tuple<wl_compositor, xdg_wm_base, wl_seat>;
+		using Interfaces = std::tuple<wl_compositor, xdg_wm_base, wl_shm, wl_seat>;
 
 		registryListenerUserData.result = [&] <std::size_t I = 0> (this const auto& self) noexcept
 			-> lw::Failable<void>
@@ -164,6 +197,16 @@ namespace lw::wayland {
 				return self.template operator() <I+1> ();
 			return {};
 		} ();
+	}
+
+
+	auto Instance::handleSharedMemoryFormat(
+		void* data,
+		[[maybe_unused]] wl_shm* sharedMemory,
+		std::uint32_t format
+	) noexcept -> void {
+		auto& sharedMemoryUserData {*reinterpret_cast<internals::SharedMemoryListenerUserData*> (data)};
+		sharedMemoryUserData.supportedFormats.push_back(format);
 	}
 
 

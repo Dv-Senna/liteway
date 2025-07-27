@@ -4,6 +4,7 @@
 #include <liteway/error.hpp>
 #include <liteway/janitor.hpp>
 #include <liteway/wayland/instance.hpp>
+#include <liteway/wayland/window.hpp>
 
 
 auto run() noexcept -> lw::Failable<void> {
@@ -12,7 +13,17 @@ auto run() noexcept -> lw::Failable<void> {
 	})};
 	if (!instanceWithError)
 		return lw::pushToErrorStack(instanceWithError, "Can't create liteway instance");
+	auto& instance {*instanceWithError};
 
+	lw::Failable windowWithError {lw::wayland::Window::create({
+		instance,
+		"liteway",
+		16*70, 9*70
+	})};
+	if (!windowWithError)
+		return lw::pushToErrorStack(windowWithError, "Can't create liteway window");
+	[[maybe_unused]]
+	auto& window {*windowWithError};
 	return {};
 }
 
