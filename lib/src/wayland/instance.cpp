@@ -94,6 +94,13 @@ namespace lw::wayland {
 	}
 
 
+	auto Instance::update() noexcept -> lw::Failable<void> {
+		if (wl_display_dispatch(m_state->display) < 0)
+			return lw::makeErrorStack("Can't dispatch display");
+		return {};
+	}
+
+
 	template <>
 	auto Instance::bindGlobalFromRegistry<wl_compositor> (
 		internals::RegistryListenerUserData& registryListenerUserData,

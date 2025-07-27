@@ -1,5 +1,7 @@
 #include "liteway/wayland/window.hpp"
 
+#include <algorithm>
+#include <cassert>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -13,6 +15,7 @@
 #include <wayland-client-protocol.h>
 #include <xdg-shell/xdg-shell-client-protocol.h>
 
+#include "liteway/color.hpp"
 #include "liteway/error.hpp"
 #include "liteway/janitor.hpp"
 #include "liteway/wayland/instance.hpp"
@@ -70,10 +73,29 @@ namespace lw::wayland {
 		)};
 		if (!bufferWithError)
 			return lw::pushToErrorStack(bufferWithError, "Can't create buffer for surface");
+		auto& [buffer, bufferData] {*bufferWithError};
+		window.m_buffer = std::move(buffer);
+		window.m_bufferData = std::move(bufferData);
 
 		wl_surface_attach(window.m_surface, window.m_buffer, 0, 0);
 		wl_surface_commit(window.m_surface);
+
+		(void)window.fill({.r = 0, .g = 0, .b = 0, .a = 170});
 		return window;
+	}
+
+
+	auto Window::fill(const lw::Color& color) noexcept -> lw::Failable<void> {
+		assert((m_bufferData.size() & 0b11) == 0b00 && "Buffer size must be a multiple of 4, so it can be uint32_t");
+		assert(((std::size_t)m_bufferData.data() & 0b11) == 0b00
+			&& "Buffer must be aligned to 4 bytes, so it can be uint32_t"
+		);
+		const std::span<std::uint32_t> bufferDataAsU32 {
+			reinterpret_cast<std::uint32_t*> (m_bufferData.data()),
+			m_bufferData.size() >> 2uz
+		};
+		std::ranges::fill(bufferDataAsU32, colorToUint32(color));
+		return {};
 	}
 
 

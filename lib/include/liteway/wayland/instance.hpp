@@ -66,6 +66,8 @@ namespace lw::wayland {
 
 			static auto create(CreateInfos&& createInfos) noexcept -> lw::Failable<Instance>;
 
+			auto update() noexcept -> lw::Failable<void>;
+
 			template <typename T>
 			static auto bindGlobalFromRegistry(
 				internals::RegistryListenerUserData& registryListenerUserData,

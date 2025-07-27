@@ -113,7 +113,7 @@ namespace lw {
 			constexpr auto end() const noexcept {return m_end;}
 
 			constexpr auto data() const noexcept {return m_start;}
-			constexpr auto size() const noexcept {return m_end - m_start;}
+			constexpr auto size() const noexcept {return static_cast<std::size_t> (m_end - m_start);}
 			constexpr auto empty() const noexcept {return m_start == nullptr;}
 
 

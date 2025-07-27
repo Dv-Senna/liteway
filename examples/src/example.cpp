@@ -24,6 +24,13 @@ auto run() noexcept -> lw::Failable<void> {
 		return lw::pushToErrorStack(windowWithError, "Can't create liteway window");
 	[[maybe_unused]]
 	auto& window {*windowWithError};
+
+	bool running {true};
+	while (running) {
+		lw::Failable litewayUpdateResult {instance.update()};
+		if (!litewayUpdateResult) [[unlikely]]
+			return lw::pushToErrorStack(litewayUpdateResult, "Can't update liteway");
+	}
 	return {};
 }
 

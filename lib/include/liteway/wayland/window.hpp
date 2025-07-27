@@ -6,6 +6,7 @@
 #include <xdg-shell/xdg-shell-client-protocol.h>
 #include <wayland-client.h>
 
+#include "liteway/color.hpp"
 #include "liteway/error.hpp"
 #include "liteway/export.hpp"
 #include "liteway/pointer.hpp"
@@ -32,6 +33,8 @@ namespace lw::wayland {
 			};
 
 			static auto create(CreateInfos&& createInfos) noexcept -> lw::Failable<Window>;
+
+			auto fill(const lw::Color& color) noexcept -> lw::Failable<void>;
 
 		private:
 			static auto s_createAnonymousFile(std::string_view name, std::size_t size) noexcept -> lw::Failable<int>;

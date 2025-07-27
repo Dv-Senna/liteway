@@ -55,8 +55,9 @@ namespace lw {
 	};
 
 	template <typename T>
-	using Failable = std::expected<T, lw::ErrorStack>;
-
+	struct [[nodiscard]] Failable : std::expected<T, lw::ErrorStack> {
+		using std::expected<T, lw::ErrorStack>::expected;
+	};
 
 
 	template <typename ...Args>
