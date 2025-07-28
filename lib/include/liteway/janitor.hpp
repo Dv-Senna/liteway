@@ -13,16 +13,18 @@ namespace lw {
 			Janitor(Janitor<Callback>&&) = delete;
 			auto operator=(Janitor<Callback>&&) = delete;
 
-			// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
-			constexpr Janitor(Callback&& callback) noexcept requires (std::is_nothrow_invocable_v<Callback>) :
-				m_callback {std::forward<Callback> (callback)}
+			template <typename Callback2>
+			requires (std::is_nothrow_invocable_v<Callback2>)
+			constexpr Janitor(Callback2&& callback) noexcept :
+				m_callback {std::forward<Callback2> (callback)}
 			{}
 
+			template <typename Callback2>
+			requires (!std::is_nothrow_invocable_v<Callback2>)
 			[[deprecated("Using a callback that can throw is not recommended as it will be called inside"
 				" a destructor")]]
-			// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
-			constexpr Janitor(Callback&& callback) noexcept requires (!std::is_nothrow_invocable_v<Callback>) :
-				m_callback {std::forward<Callback> (callback)}
+			constexpr Janitor(Callback2&& callback) noexcept :
+				m_callback {std::forward<Callback2> (callback)}
 			{}
 
 			constexpr ~Janitor() {
@@ -32,4 +34,7 @@ namespace lw {
 		private:
 			Callback m_callback;
 	};
+
+	template <typename Callback>
+	Janitor(Callback&&) -> Janitor<Callback>;
 }
