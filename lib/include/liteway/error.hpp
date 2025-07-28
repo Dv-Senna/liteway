@@ -17,24 +17,27 @@ namespace lw {
 	};
 
 	class ErrorStack final {
-		ErrorStack(const ErrorStack&) = delete;
-		auto operator=(const ErrorStack&) = delete;
-
 		public:
+			ErrorStack(const ErrorStack&) = delete;
+			auto operator=(const ErrorStack&) = delete;
+
 			inline ErrorStack() noexcept = default;
+			inline ~ErrorStack() = default;
 			inline ErrorStack(ErrorStack&&) noexcept = default;
 			inline auto operator=(ErrorStack&&) noexcept -> ErrorStack& = default;
 
 			inline auto push(lw::ErrorFrame&& frame) noexcept -> void {
 				m_frames.push(std::move(frame));
 			}
+			[[nodiscard]]
 			inline auto front() const noexcept -> const lw::ErrorFrame& {return m_frames.front();}
 			inline auto pop() noexcept -> void {m_frames.pop();}
+			[[nodiscard]]
 			inline auto isEmpty() const noexcept -> bool {return m_frames.empty();}
 
 			template <typename T, typename CleanT = std::remove_cvref_t<T>>
 			requires std::same_as<CleanT, FILE*> || std::derived_from<CleanT, std::ostream>
-			inline auto print(T&& file) noexcept -> void {
+			inline auto print(T& file) noexcept -> void {
 				if (m_frames.empty())
 					return;
 				std::println(file, "Error stack:");
@@ -56,6 +59,7 @@ namespace lw {
 
 	template <typename T>
 	struct [[nodiscard]] Failable : std::expected<T, lw::ErrorStack> {
+		// NOLINTNEXTLINE(cppcoreguidelines-rvalue-reference-param-not-moved)
 		using std::expected<T, lw::ErrorStack>::expected;
 	};
 
@@ -113,6 +117,7 @@ namespace lw {
 			}
 
 		private:
+			// NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
 			lw::ErrorStack& m_stack;
 			lw::ErrorFrame m_frame;
 	};

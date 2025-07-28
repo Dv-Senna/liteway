@@ -16,9 +16,9 @@ auto run() noexcept -> lw::Failable<void> {
 	auto& instance {*instanceWithError};
 
 	lw::Failable windowWithError {lw::wayland::Window::create({
-		instance,
-		"liteway",
-		16*70, 9*70
+		.instance = instance,
+		.title = "liteway",
+		.width = 16*70, .height = 9*70
 	})};
 	if (!windowWithError)
 		return lw::pushToErrorStack(windowWithError, "Can't create liteway window");

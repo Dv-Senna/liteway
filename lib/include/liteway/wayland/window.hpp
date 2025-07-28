@@ -16,23 +16,24 @@ namespace lw::wayland {
 	class Instance;
 
 	class LW_EXPORT Window final {
-		Window(const Window&) = delete;
-		auto operator=(const Window&) = delete;
-
 		public:
+			Window(const Window&) = delete;
+			auto operator=(const Window&) = delete;
+
 			inline Window() noexcept = default;
 			inline Window(Window&&) noexcept = default;
 			inline auto operator=(Window&&) noexcept -> Window& = default;
 			~Window();
 
 			struct CreateInfos {
+				// NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
 				Instance& instance;
 				std::string_view title;
 				std::uint32_t width;
 				std::uint32_t height;
 			};
 
-			static auto create(CreateInfos&& createInfos) noexcept -> lw::Failable<Window>;
+			static auto create(const CreateInfos& createInfos) noexcept -> lw::Failable<Window>;
 
 			auto fill(const lw::Color& color) noexcept -> lw::Failable<void>;
 

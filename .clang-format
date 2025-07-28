@@ -1,0 +1,26 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+ColumnLimit: 120
+IndentWidth: 4
+TabWidth: 4
+UseTab: ForContinuationAndIndentation
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: <[^.]*>
+    Priority: 1
+  - Regex: <[^/<]*\.h>
+    Priority: 2
+  - Regex: <sys\/[^/<]*\.h>
+    Priority: 2
+  - Regex: <linux\/[^/<]*\.h>
+    Priority: 2
+  - Regex: <.*>
+    Priority: 3
+MaxEmptyLinesToKeep: 2
+NamespaceIndentation: All
+SpaceBeforeCpp11BracedList: True
+AllowShortIfStatementsOnASingleLine: Never 
+AlignAfterOpenBracket: BlockIndent
+PenaltyBreakBeforeFirstCallParameter: 1
+BinPackParameters: OnePerLine

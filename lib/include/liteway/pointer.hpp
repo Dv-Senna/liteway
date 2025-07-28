@@ -11,12 +11,11 @@ namespace lw {
 	template <typename T>
 	requires (std::is_pointer_v<T>)
 	class Owned final {
-		Owned(const Owned<T>&) = delete;
-		auto operator=(const Owned<T>&) = delete;
-
 		using ElementType = typename std::pointer_traits<T>::element_type;
-
 		public:
+			Owned(const Owned<T>&) = delete;
+			auto operator=(const Owned<T>&) = delete;
+
 			constexpr Owned() noexcept : m_ptr {nullptr} {}
 			constexpr ~Owned() = default;
 			explicit constexpr Owned(std::nullptr_t) noexcept : m_ptr {nullptr} {}
@@ -34,25 +33,32 @@ namespace lw {
 				return *this;
 			}
 
+			[[nodiscard]]
 			constexpr auto operator==(std::nullptr_t) const noexcept -> bool {
 				return m_ptr == nullptr;
 			}
 
+			[[nodiscard]]
 			explicit constexpr operator bool() const noexcept {
 				return !!m_ptr;
 			}
+			[[nodiscard]]
 			constexpr operator T() const noexcept {
 				return this->get();
 			}
 
+			[[nodiscard]]
 			constexpr auto operator*() const noexcept -> std::add_lvalue_reference_t<ElementType>
 				requires (!std::same_as<std::remove_cvref_t<ElementType>, void>)
 			{
 				return *m_ptr;
 			}
+			[[nodiscard]]
 			constexpr auto operator->() const noexcept -> T {return m_ptr;}
 
+			[[nodiscard]]
 			constexpr auto get() const noexcept -> T {return m_ptr;}
+			[[nodiscard]]
 			constexpr auto release() noexcept -> T {
 				T ptr {m_ptr};
 				m_ptr = nullptr;
@@ -72,10 +78,10 @@ namespace lw {
 	template <typename T>
 	class OwnedSpan final {
 		using This = OwnedSpan<T>;
-		OwnedSpan(const This&) = delete;
-		auto operator=(const This&) = delete;
-
 		public:
+			OwnedSpan(const This&) = delete;
+			auto operator=(const This&) = delete;
+
 			constexpr OwnedSpan() noexcept :
 				m_start {nullptr},
 				m_end {nullptr}
@@ -104,16 +110,22 @@ namespace lw {
 			}
 			constexpr OwnedSpan(T* const start, const std::size_t size) noexcept :
 				m_start {start},
+				// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
 				m_end {start + size}
 			{
 				assert(size > 0 && "Size of owned span must be at least 1");
 			}
 
+			[[nodiscard]]
 			constexpr auto begin() const noexcept {return m_start;}
+			[[nodiscard]]
 			constexpr auto end() const noexcept {return m_end;}
 
+			[[nodiscard]]
 			constexpr auto data() const noexcept {return m_start;}
+			[[nodiscard]]
 			constexpr auto size() const noexcept {return static_cast<std::size_t> (m_end - m_start);}
+			[[nodiscard]]
 			constexpr auto empty() const noexcept {return m_start == nullptr;}
 
 

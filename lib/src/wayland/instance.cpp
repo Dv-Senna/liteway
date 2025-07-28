@@ -108,7 +108,7 @@ namespace lw::wayland {
 		std::uint32_t version
 	) noexcept -> lw::Failable<void> {
 		internals::InstanceState& state {registryListenerUserData.state};
-		state.compositor = lw::Owned{reinterpret_cast<wl_compositor*> (
+		state.compositor = lw::Owned{static_cast<wl_compositor*> (
 			wl_registry_bind(state.registry, name, &wl_compositor_interface, version)
 		)};
 		if (state.compositor == nullptr)
@@ -124,7 +124,7 @@ namespace lw::wayland {
 		std::uint32_t version
 	) noexcept -> lw::Failable<void> {
 		internals::InstanceState& state {registryListenerUserData.state};
-		state.windowManagerBase = lw::Owned{reinterpret_cast<xdg_wm_base*> (
+		state.windowManagerBase = lw::Owned{static_cast<xdg_wm_base*> (
 			wl_registry_bind(state.registry, name, &xdg_wm_base_interface, version)
 		)};
 		if (state.windowManagerBase == nullptr)
@@ -143,7 +143,7 @@ namespace lw::wayland {
 		std::uint32_t version
 	) noexcept -> lw::Failable<void> {
 		internals::InstanceState& state {registryListenerUserData.state};
-		state.sharedMemory = lw::Owned{reinterpret_cast<wl_shm*> (
+		state.sharedMemory = lw::Owned{static_cast<wl_shm*> (
 			wl_registry_bind(state.registry, name, &wl_shm_interface, version)
 		)};
 		if (state.sharedMemory == nullptr)
@@ -166,7 +166,7 @@ namespace lw::wayland {
 		std::uint32_t version
 	) noexcept -> lw::Failable<void> {
 		internals::InstanceState& state {registryListenerUserData.state};
-		state.seat = lw::Owned{reinterpret_cast<wl_seat*> (
+		state.seat = lw::Owned{static_cast<wl_seat*> (
 			wl_registry_bind(state.registry, name, &wl_seat_interface, version)
 		)};
 		if (state.seat == nullptr)
@@ -186,7 +186,7 @@ namespace lw::wayland {
 		std::uint32_t version
 	) noexcept -> void {
 		using namespace std::string_view_literals;
-		auto& registryListenerUserData {*reinterpret_cast<internals::RegistryListenerUserData*> (data)};
+		auto& registryListenerUserData {*static_cast<internals::RegistryListenerUserData*> (data)};
 		if (!registryListenerUserData.result)
 			return;
 
@@ -214,13 +214,13 @@ namespace lw::wayland {
 		[[maybe_unused]] wl_shm* sharedMemory,
 		std::uint32_t format
 	) noexcept -> void {
-		auto& sharedMemoryUserData {*reinterpret_cast<internals::SharedMemoryListenerUserData*> (data)};
+		auto& sharedMemoryUserData {*static_cast<internals::SharedMemoryListenerUserData*> (data)};
 		sharedMemoryUserData.supportedFormats.push_back(format);
 	}
 
 
 	auto Instance::handleSeatCapabilites(void* data, wl_seat* seat, std::uint32_t capabilities) noexcept -> void {
-		auto& seatListenerUserData {*reinterpret_cast<internals::SeatListenerUserData*> (data)};
+		auto& seatListenerUserData {*static_cast<internals::SeatListenerUserData*> (data)};
 		internals::InstanceState& state {seatListenerUserData.first};
 		lw::Failable<void>& result {seatListenerUserData.second};
 

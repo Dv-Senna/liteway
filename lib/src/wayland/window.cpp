@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cerrno>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -45,7 +46,7 @@ namespace lw::wayland {
 	}
 
 
-	auto Window::create(CreateInfos&& createInfos) noexcept -> lw::Failable<Window> {
+	auto Window::create(const CreateInfos& createInfos) noexcept -> lw::Failable<Window> {
 		Window window {};
 
 		window.m_surface = Owned{wl_compositor_create_surface(createInfos.instance.m_state->compositor)};
@@ -87,10 +88,12 @@ namespace lw::wayland {
 
 	auto Window::fill(const lw::Color& color) noexcept -> lw::Failable<void> {
 		assert((m_bufferData.size() & 0b11) == 0b00 && "Buffer size must be a multiple of 4, so it can be uint32_t");
-		assert(((std::size_t)m_bufferData.data() & 0b11) == 0b00
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+		assert((reinterpret_cast<std::uintptr_t> (m_bufferData.data()) & 0b11) == 0b00
 			&& "Buffer must be aligned to 4 bytes, so it can be uint32_t"
 		);
 		const std::span<std::uint32_t> bufferDataAsU32 {
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
 			reinterpret_cast<std::uint32_t*> (m_bufferData.data()),
 			m_bufferData.size() >> 2uz
 		};
@@ -102,10 +105,10 @@ namespace lw::wayland {
 	auto Window::s_createAnonymousFile(std::string_view name, std::size_t size) noexcept -> lw::Failable<int> {
 		using namespace std::string_view_literals;
 		const std::string_view postfix {"-liteway-wayland-XXXXXX"};
-		const std::string_view directoryPath {std::getenv("XDG_RUNTIME_DIR")};
-		if (directoryPath.empty())
+		const char* directoryPath {std::getenv("XDG_RUNTIME_DIR")};
+		if (directoryPath == nullptr)
 			return lw::makeErrorStack("Can't create anonymous file '{}' of size {}B", name, size);
-		auto path {std::array{directoryPath, "/"sv, name, postfix}
+		auto path {std::array{std::string_view{directoryPath}, "/"sv, name, postfix}
 			| std::views::join
 			| std::ranges::to<std::string> ()
 		};
@@ -118,7 +121,7 @@ namespace lw::wayland {
 		}
 		if (unlink(path.c_str()) != 0)
 			return lw::makeErrorStack("Can't unlink anonymous file '{}' : {}", name, strerror(errno));
-		if (ftruncate(fd, size) != 0)
+		if (ftruncate(fd, static_cast<std::int32_t> (size)) != 0)
 			return lw::makeErrorStack("Can't truncate anonymous file '{}' : {}", name, strerror(errno));
 		return fd;
 	}
@@ -141,14 +144,17 @@ namespace lw::wayland {
 		const int fd {*fdWithError};
 		lw::Janitor _ {[fd]() noexcept {close(fd);}};
 
-		const auto bufferData {reinterpret_cast<std::byte*> (mmap(nullptr, size, PROT_WRITE, MAP_SHARED, fd, 0))};
+		const auto bufferData {static_cast<std::byte*> (mmap(nullptr, size, PROT_WRITE, MAP_SHARED, fd, 0))};
 		if (bufferData == MAP_FAILED)
 			return lw::makeErrorStack("Can't map anonymous file : {}", strerror(errno));
 
-		wl_shm_pool* pool {wl_shm_create_pool(sharedMemory, fd, size)};
+		wl_shm_pool* pool {wl_shm_create_pool(sharedMemory, fd, static_cast<std::int32_t> (size))};
 		if (pool == nullptr)
 			return lw::makeErrorStack("Can't create shared memory pool");
-		wl_buffer* buffer {wl_shm_pool_create_buffer(pool, 0, width, height, stride, surfaceFormat)};
+		wl_buffer* buffer {wl_shm_pool_create_buffer(
+			pool, 0, static_cast<std::int32_t> (width), static_cast<std::int32_t> (height),
+			static_cast<std::int32_t> (stride), surfaceFormat
+		)};
 		wl_shm_pool_destroy(pool);
 		if (buffer == nullptr)
 			return lw::makeErrorStack("Can't create buffer from shared memory pool");

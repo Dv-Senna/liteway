@@ -25,6 +25,7 @@ namespace lw::wayland {
 				sharedMemoryListenerUserData {}
 			{}
 
+			// NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
 			InstanceState& state;
 			lw::Failable<void> result;
 			SeatListenerUserData seatListenerUserData;
@@ -50,11 +51,11 @@ namespace lw::wayland {
 
 
 	class LW_EXPORT Instance {
-		Instance(const Instance&) = delete;
-		auto operator=(const Instance&) = delete;
 		friend class Window;
-
 		public:
+			Instance(const Instance&) = delete;
+			auto operator=(const Instance&) = delete;
+
 			inline Instance() noexcept = default;
 			inline Instance(Instance&&) noexcept = default;
 			inline auto operator=(Instance&&) noexcept -> Instance& = default;
